@@ -644,3 +644,41 @@ func TestFunctionCallWithUnknownVals(t *testing.T) {
 		}
 	})
 }
+
+func TestDynamicArgumentDoesNotHideInvalidArguments(t *testing.T) {
+	stringParam := Parameter{Type: cty.String}
+	for _, test := range []struct {
+		name   string
+		params []Parameter
+		vararg *Parameter
+	}{
+		{"positional", []Parameter{stringParam, stringParam}, nil},
+		{"variadic", nil, &stringParam},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f := New(&Spec{
+				Params:   test.params,
+				VarParam: test.vararg,
+				Type: func([]cty.Value) (cty.Type, error) {
+					t.Fatal("type callback must not receive a disallowed dynamic argument")
+					return cty.NilType, nil
+				},
+				Impl: stubImpl,
+			})
+			for _, invalid := range []cty.Value{cty.NullVal(cty.String), cty.True} {
+				args := []cty.Value{cty.DynamicVal, invalid}
+				if _, err := f.ReturnTypeForValues(args); err == nil {
+					t.Errorf("ReturnTypeForValues accepted %#v", args)
+				}
+				if _, err := f.Call(args); err == nil {
+					t.Errorf("Call accepted %#v", args)
+				}
+			}
+
+			got, err := f.Call([]cty.Value{cty.DynamicVal, cty.StringVal("valid")})
+			if err != nil || !got.RawEquals(cty.DynamicVal) {
+				t.Errorf("Call with valid remaining argument = %#v, %v; want dynamic result", got, err)
+			}
+		})
+	}
+}

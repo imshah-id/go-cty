@@ -177,7 +177,7 @@ func (f Function) returnTypeForValues(args []cty.Value) (ty cty.Type, dynTypedAr
 
 		if val.Type() == cty.DynamicPseudoType {
 			if !spec.AllowDynamicType {
-				return cty.DynamicPseudoType, true, nil
+				dynTypedArgs = true
 			}
 		} else if errs := val.Type().TestConformance(spec.Type); errs != nil {
 			// For now we'll just return the first error in the set, since
@@ -207,7 +207,7 @@ func (f Function) returnTypeForValues(args []cty.Value) (ty cty.Type, dynTypedAr
 
 			if val.Type() == cty.DynamicPseudoType {
 				if !spec.AllowDynamicType {
-					return cty.DynamicPseudoType, true, nil
+					dynTypedArgs = true
 				}
 			} else if errs := val.Type().TestConformance(spec.Type); errs != nil {
 				// For now we'll just return the first error in the set, since
@@ -216,6 +216,12 @@ func (f Function) returnTypeForValues(args []cty.Value) (ty cty.Type, dynTypedAr
 				return cty.Type{}, false, NewArgError(i, errs[0])
 			}
 		}
+	}
+
+	// A dynamic argument makes the return type unknown, but other
+	// arguments can still be rejected by their parameter specifications.
+	if dynTypedArgs {
+		return cty.DynamicPseudoType, true, nil
 	}
 
 	// Intercept any panics from the function and return them as normal errors,
